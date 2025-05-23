@@ -5,14 +5,16 @@
  * @format
  */
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import MainScreen from './src/screens/MainScreen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { enableScreens } from 'react-native-screens';
 import BleDeviceConnector from './src/components/BleDeviceConnector';
-import { RootStackParamList } from './src/types/navigation';
+import { RootStackParamList, DeviceConnectorRouteProp } from './src/types/navigation';
+import { useDeviceConnector } from './src/hooks/useDeviceConnector';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 // Habilitar screens para mejorar el rendimiento de la navegación
 enableScreens();
@@ -45,14 +47,14 @@ const App = () => {
   );
 };
 
-// Update the DeviceConnectorScreen to use the typed route
-const DeviceConnectorScreen = ({ route, navigation }) => {
-  const { deviceId } = route.params;
-  
-  const handleDisconnect = () => {
-    // Volver a la pantalla principal al desconectar
-    navigation.goBack();
-  };
+// DeviceConnectorScreen component with proper typing
+interface DeviceConnectorScreenProps {
+  route: DeviceConnectorRouteProp;
+  navigation: NativeStackNavigationProp<RootStackParamList, 'DeviceConnector'>;
+}
+
+const DeviceConnectorScreen: React.FC<DeviceConnectorScreenProps> = ({ route }) => {
+  const { deviceId, handleDisconnect } = useDeviceConnector(route.params.deviceId);
   
   return (
     <BleDeviceConnector 
