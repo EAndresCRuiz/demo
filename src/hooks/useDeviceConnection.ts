@@ -6,42 +6,44 @@ export const useDeviceConnection = (deviceId: string, onDisconnect: () => void) 
         name: 'Desconocido',
         rssi: null
     });
+    const [isConnected, setIsConnected] = useState(false);
     const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [services, setServices] = useState<BLEService[]>([]);
+    const [error, setError] = useState<Error | null>(null);
     const [notifyingCharacteristics, setNotifyingCharacteristics] = useState<Set<string>>(new Set());
 
     const bleManager = BLEManagerService.getInstance();
 
     useEffect(() => {
-        const getDeviceInfo = async () => {
+        let isMounted = true;
+
+        const connect = async () => {
+            setIsLoading(true);
+            setError(null);
+
             try {
-                const devices = await bleManager.connectToDevice(deviceId);
-                discoverServices();
-            } catch (error) {
-                console.error('Error al obtener información del dispositivo:', error);
+                const connectedDevice = await bleManager.connectToDevice(deviceId);
+
+                if (!isMounted) return;
+
+                setIsConnected(true);
+            } catch (err) {
+                if (isMounted) {
+                    setError(err as Error);
+                    setIsConnected(false);
+                }
+            } finally {
+                if (isMounted) setIsLoading(false);
             }
         };
 
-        getDeviceInfo();
+        connect();
 
         return () => {
-            cleanupConnection();
+            isMounted = false;
+            bleManager.disconnectFromDevice(deviceId);
+            if (onDisconnect) onDisconnect();
         };
-    }, []);
-
-    const discoverServices = async () => {
-        try {
-            setIsLoading(true);
-            const discoveredServices = await bleManager.discoverServices(deviceId);
-            setServices(discoveredServices);
-            setIsLoading(false);
-            return discoveredServices;
-        } catch (error) {
-            console.error('Error al descubrir servicios:', error);
-            setIsLoading(false);
-            throw error;
-        }
-    };
+    }, [deviceId]);
 
     const cleanupConnection = async () => {
         try {
@@ -74,8 +76,9 @@ export const useDeviceConnection = (deviceId: string, onDisconnect: () => void) 
 
     return {
         deviceInfo,
+        isConnected,
         isLoading,
+        error,
         disconnect,
-        services
     };
 };

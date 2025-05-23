@@ -6,7 +6,11 @@ export const useDeviceConnector = (deviceId: string) => {
   
   const handleDisconnect = () => {
     // Volver a la pantalla principal al desconectar
-    navigation.goBack();
+    if (navigation.canGoBack()) {
+        navigation.goBack();
+    } else {
+        navigation.navigate('Main');
+    }
   };
   
   return {

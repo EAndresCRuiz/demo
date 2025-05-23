@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator, TextInput, FlatList, Touchab
 import { useBleCharacteristics } from '../hooks/useBleCharacteristics';
 import { useBleOperations } from '../hooks/useBleOperations';
 import { useDeviceConnection } from '../hooks/useDeviceConnection';
+import { useBleServices } from '../hooks/useBleServices';
 
 interface Props {
   deviceId: string;
@@ -11,7 +12,17 @@ interface Props {
 
 const BleDeviceConnector: React.FC<Props> = ({ deviceId, onDisconnect }) => {
   
-  const { deviceInfo, isLoading: connectionLoading, disconnect, services } = useDeviceConnection(deviceId, onDisconnect);
+  const {
+    deviceInfo,
+    isConnected,
+    isLoading: connectionLoading,
+    disconnect,
+  } = useDeviceConnection(deviceId, onDisconnect);
+  const {
+    services,
+    isDiscovering,
+    error: serviceError,
+  } = useBleServices(deviceId, isConnected);
   const { characteristics, selectedService, isLoading: characteristicsLoading, selectService } = useBleCharacteristics(deviceId);
   const { 
     receivedData, 
@@ -26,7 +37,7 @@ const BleDeviceConnector: React.FC<Props> = ({ deviceId, onDisconnect }) => {
     clearReceivedData
   } = useBleOperations(deviceId);
   
-  const isLoading = connectionLoading || characteristicsLoading || operationsLoading;
+  const isLoading = connectionLoading || isDiscovering || characteristicsLoading || operationsLoading;
   
   return (
     <View style={styles.container}>
