@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, Button, StyleSheet, ActivityIndicator, TextInput, FlatList, TouchableOpacity, ScrollView, Platform } from 'react-native';
-import BLEManagerService, { BLEDevice, BLEService, BLECharacteristic } from '../services/BLEManager';
+import React from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, TextInput, FlatList, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { useBleCharacteristics } from '../hooks/useBleCharacteristics';
+import { useBleOperations } from '../hooks/useBleOperations';
+import { useDeviceConnection } from '../hooks/useDeviceConnection';
 
 interface Props {
   deviceId: string;
@@ -8,219 +10,23 @@ interface Props {
 }
 
 const BleDeviceConnector: React.FC<Props> = ({ deviceId, onDisconnect }) => {
-  const [services, setServices] = useState<BLEService[]>([]);
-  const [selectedService, setSelectedService] = useState<string | null>(null);
-  const [characteristics, setCharacteristics] = useState<BLECharacteristic[]>([]);
-  const [receivedData, setReceivedData] = useState<string>('');
-  const [messageToSend, setMessageToSend] = useState<string>('Hola desde la app');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [notifyingCharacteristics, setNotifyingCharacteristics] = useState<Set<string>>(new Set());
-  const [deviceInfo, setDeviceInfo] = useState<{name: string, rssi: number | null}>({name: 'Desconocido', rssi: null});
   
-  const bleManager = BLEManagerService.getInstance();
+  const { deviceInfo, isLoading: connectionLoading, disconnect, services } = useDeviceConnection(deviceId, onDisconnect);
+  const { characteristics, selectedService, isLoading: characteristicsLoading, selectService } = useBleCharacteristics(deviceId);
+  const { 
+    receivedData, 
+    messageToSend, 
+    isLoading: operationsLoading, 
+    notifyingCharacteristics,
+    setMessageToSend,
+    readCharacteristic,
+    writeCharacteristic,
+    startNotifications,
+    stopNotifications,
+    clearReceivedData
+  } = useBleOperations(deviceId);
   
-  useEffect(() => {
-    // Obtener información básica del dispositivo
-    const getDeviceInfo = async () => {
-      try {
-        const devices = await bleManager.connectToDevice(deviceId)
-        //getDiscoveredDevices();
-        console.log("devices ");
-        console.log(devices);
-        
-        /* devices.map(device => {
-            bleManager.discoverServices(device.id)
-            .then(res => {
-                console.log("estory en then");
-                console.log(res);
-                
-                
-            })
-            .catch(err => {
-                console.log("hubo error");
-                console.log(err);
-                
-                
-            })
-        }) */
-        
-        /* const device = devices.find(d => {
-
-            if(d.id === deviceId){
-                console.log("ENCONTRADOOOO");
-                console.log(d);
-                
-                
-                return d;
-            }
-      }); */
-        /* console.log("devices log");
-        console.log(device); */
-        
-        
-        /* if (device) {
-          setDeviceInfo({
-            name: device.name || 'Dispositivo sin nombre',
-            rssi: device.rssi || null
-          });
-        } */
-          discoverServices();
-      } catch (error) {
-        console.error('Error al obtener información del dispositivo:', error);
-      }
-    };
-
-    
-    getDeviceInfo();
-    
-    
-    return () => {
-        console.log("VA A LIMPIAR!!!");
-        
-      // Limpiar al desmontar - desconectar y detener notificaciones
-      cleanupConnection();
-    };
-  }, []);
-  
-  const cleanupConnection = async () => {
-    try {
-      // Detener todas las notificaciones activas
-      for (const charUuid of notifyingCharacteristics) {
-        if (selectedService) {
-          await bleManager.stopNotifications(deviceId, selectedService, charUuid);
-        }
-      }
-      
-      // Desconectar del dispositivo
-      await bleManager.disconnectFromDevice(deviceId);
-      
-      // Limpiar otros recursos
-      bleManager.cleanup();
-    } catch (error) {
-      console.error('Error durante la limpieza:', error);
-    }
-  };
-  
-  const discoverServices = async () => {
-    try {
-        
-      setIsLoading(true);
-      const discoveredServices = await bleManager.discoverServices(deviceId);
-      
-      
-      setServices(discoveredServices);
-      setIsLoading(false);
-    } catch (error) {
-      console.error('Error al descubrir servicios:', error);
-      setIsLoading(false);
-    }
-  };
-  
-  const selectService = async (serviceUUID: string) => {
-    try {
-      setSelectedService(serviceUUID);
-      setIsLoading(true);
-      const discoveredCharacteristics = await bleManager.discoverCharacteristics(deviceId, serviceUUID);
-      setCharacteristics(discoveredCharacteristics);
-      setIsLoading(false);
-    } catch (error) {
-      console.error('Error al descubrir características:', error);
-      setIsLoading(false);
-    }
-  };
-  
-  const readCharacteristic = async (serviceUUID: string, characteristicUUID: string) => {
-    try {
-      setIsLoading(true);
-      const data = await bleManager.readStringCharacteristic(deviceId, serviceUUID, characteristicUUID);
-      
-      
-      // Update the state with the received data - this is where the fix is needed
-      setReceivedData(prev => {
-        
-        
-        return `${new Date().toLocaleTimeString()} [LECTURA] ${data}\n${prev}`
-      });
-      
-      setIsLoading(false);
-    } catch (error) {
-      console.error('Error al leer característica:', error);
-      setIsLoading(false);
-      setReceivedData(prev => `${new Date().toLocaleTimeString()} [ERROR] Error al leer: ${error}\n${prev}`);
-    }
-  };
-  
-  const writeCharacteristic = async (serviceUUID: string, characteristicUUID: string) => {
-    try {
-      setIsLoading(true);
-      await bleManager.writeStringCharacteristic(deviceId, serviceUUID, characteristicUUID, messageToSend);
-      setReceivedData(prev => `${new Date().toLocaleTimeString()} [ENVIADO] ${messageToSend}\n${prev}`);
-      setIsLoading(false);
-    } catch (error) {
-      console.error('Error al escribir característica:', error);
-      setIsLoading(false);
-      setReceivedData(prev => `${new Date().toLocaleTimeString()} [ERROR] Error al escribir: ${error}\n${prev}`);
-    }
-  };
-  
-  const startNotifications = async (serviceUUID: string, characteristicUUID: string) => {
-    try {
-      setIsLoading(true);
-      await bleManager.startNotifications(
-        deviceId, 
-        serviceUUID, 
-        characteristicUUID,
-        (value) => {
-          setReceivedData(prev => `${new Date().toLocaleTimeString()} [NOTIFICACIÓN] ${value}\n${prev}`);
-        }
-      );
-      
-      // Actualizar el conjunto de características con notificaciones activas
-      setNotifyingCharacteristics(prev => new Set(prev).add(characteristicUUID));
-      setIsLoading(false);
-      setReceivedData(prev => `${new Date().toLocaleTimeString()} [INFO] Notificaciones iniciadas para ${characteristicUUID}\n${prev}`);
-    } catch (error) {
-      console.error('Error al activar notificaciones:', error);
-      setIsLoading(false);
-      setReceivedData(prev => `${new Date().toLocaleTimeString()} [ERROR] Error al iniciar notificaciones: ${error}\n${prev}`);
-    }
-  };
-  
-  const stopNotifications = async (serviceUUID: string, characteristicUUID: string) => {
-    try {
-      setIsLoading(true);
-      await bleManager.stopNotifications(deviceId, serviceUUID, characteristicUUID);
-      
-      // Actualizar el conjunto de características con notificaciones activas
-      const updatedNotifying = new Set(notifyingCharacteristics);
-      updatedNotifying.delete(characteristicUUID);
-      setNotifyingCharacteristics(updatedNotifying);
-      
-      setIsLoading(false);
-      setReceivedData(prev => `${new Date().toLocaleTimeString()} [INFO] Notificaciones detenidas para ${characteristicUUID}\n${prev}`);
-    } catch (error) {
-      console.error('Error al desactivar notificaciones:', error);
-      setIsLoading(false);
-      setReceivedData(prev => `${new Date().toLocaleTimeString()} [ERROR] Error al detener notificaciones: ${error}\n${prev}`);
-    }
-  };
-  
-  const disconnect = async () => {
-    try {
-      setIsLoading(true);
-      await cleanupConnection();
-      setIsLoading(false);
-      // Llamar al callback de desconexión para volver a la pantalla anterior
-      onDisconnect();
-    } catch (error) {
-      console.error('Error al desconectar:', error);
-      setIsLoading(false);
-    }
-  };
-  
-  const clearReceivedData = () => {
-    setReceivedData('');
-  };
+  const isLoading = connectionLoading || characteristicsLoading || operationsLoading;
   
   return (
     <View style={styles.container}>
